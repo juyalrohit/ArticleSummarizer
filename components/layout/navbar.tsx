@@ -5,6 +5,9 @@ import { useState } from "react";
 import { Menu, X, Zap, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useArticula } from "@/lib/store";
+
+
 
 const navLinks = [
   { href: "/", label: "Home" },
@@ -14,6 +17,7 @@ const navLinks = [
 
 export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const {sessionUser, logout } = useArticula();
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 backdrop-blur-xl bg-background/80">
@@ -48,10 +52,15 @@ export function Navbar() {
               <Search size={16} />
             </Button>
           </Link>
-          <Link href="/login">
+
+         {!sessionUser ?  <Link href="/login">
             <Button variant="outline" size="sm">Sign in</Button>
-          </Link>
-          <Link href="/signup">
+          </Link> 
+          : 
+            <Button onClick={()=>logout()} variant="outline" size="sm">LogOut</Button>
+          
+        }
+          <Link href="/dashboard">
             <Button variant="gradient" size="sm">Get started</Button>
           </Link>
         </div>

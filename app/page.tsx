@@ -1,352 +1,277 @@
-"use client";
+import Link from "next/link";
+import {
+  ArrowRight,
+  Zap,
+  Search,
+  Brain,
+  Shield,
+  Database,
+  Layers,
+  CheckCircle2,
+  Star,
+} from "lucide-react";
+import { Navbar } from "@/components/layout/navbar";
+import { Footer } from "@/components/layout/footer";
+import { ArticleGrid } from "@/components/article/article-grid";
+import { articles } from "@/lib/data";
 
-import { useEffect, useMemo, useState } from "react";
+const features = [
+  {
+    icon: Layers,
+    title: "Article Management",
+    description: "Write, edit, and organize your articles in a beautiful, distraction-free editor inspired by Notion.",
+    color: "from-purple-500/20 to-violet-500/20",
+    iconColor: "text-purple-400",
+  },
+  {
+    icon: Brain,
+    title: "AI-Powered Summaries",
+    description: "Generate intelligent summaries for any article in seconds using advanced language models.",
+    color: "from-blue-500/20 to-cyan-500/20",
+    iconColor: "text-blue-400",
+  },
+  {
+    icon: Search,
+    title: "Semantic Search",
+    description: "Find exactly what you're looking for with full-text search powered by Elasticsearch.",
+    color: "from-green-500/20 to-emerald-500/20",
+    iconColor: "text-green-400",
+  },
+  {
+    icon: Database,
+    title: "Redis Caching",
+    description: "Lightning-fast response times with intelligent caching of summaries and search results.",
+    color: "from-orange-500/20 to-red-500/20",
+    iconColor: "text-orange-400",
+  },
+  {
+    icon: Shield,
+    title: "Role-Based Access",
+    description: "Granular permissions for admins and users. Manage content securely at scale.",
+    color: "from-pink-500/20 to-rose-500/20",
+    iconColor: "text-pink-400",
+  },
+  {
+    icon: Zap,
+    title: "Real-time Updates",
+    description: "Collaborate and see changes in real-time with WebSocket-powered live updates.",
+    color: "from-yellow-500/20 to-amber-500/20",
+    iconColor: "text-yellow-400",
+  },
+];
 
-type Article = {
-  id: string;
-  title: string;
-  content: string;
-  authorId?: string;
-  summary?: string;
-  updatedAt: string;
-};
+const stats = [
+  { value: "50K+", label: "Articles Published" },
+  { value: "12K+", label: "Active Writers" },
+  { value: "99.9%", label: "Uptime SLA" },
+  { value: "< 200ms", label: "Search Latency" },
+];
 
-type SessionUser = {
-  id: string;
-  email: string;
-  role: "Admin" | "User";
-};
-
-export default function Home() {
-  const [articles, setArticles] = useState<Article[]>([]);
-  const [query, setQuery] = useState("");
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
-  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
-  const [roleChoice, setRoleChoice] = useState<"Admin" | "User">("User");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [authMessage, setAuthMessage] = useState("");
-
-  const loadArticles = async (search = "") => {
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/articles?q=${encodeURIComponent(search)}`);
-      return await response.json();
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    let isActive = true;
-
-    const loadSession = async () => {
-      const response = await fetch("/api/auth/me");
-      const data = await response.json();
-      if (isActive) {
-        setSessionUser(data.user ?? null);
-      }
-    };
-
-    const load = async () => {
-      await loadSession();
-      const data = await loadArticles();
-      if (isActive) {
-        setArticles(data.articles ?? []);
-      }
-    };
-
-    void load();
-
-    return () => {
-      isActive = false;
-    };
-  }, []);
-
-  const filteredArticles = useMemo(() => articles, [articles]);
-  const groupedArticles = useMemo(() => {
-    if (!sessionUser || sessionUser.role !== "Admin") return [];
-
-    return filteredArticles.reduce<Record<string, Article[]>>((acc, article) => {
-      const label = article.authorId ? `User ${article.authorId.slice(-4)}` : "Unknown author";
-      acc[label] = [...(acc[label] ?? []), article];
-      return acc;
-    }, {});
-  }, [filteredArticles, sessionUser]);
-
-  const handleAuth = async (event: React.FormEvent) => {
-    event.preventDefault();
-    const endpoint = authMode === "login" ? "/api/auth/login" : "/api/auth/signup";
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, role: authMode === "signup" ? roleChoice : undefined }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      setAuthMessage(data.error ?? "Authentication failed.");
-      return;
-    }
-    setSessionUser(data.user);
-    setAuthMessage(`${authMode === "login" ? "Signed in" : "Account created"} successfully.`);
-    setEmail("");
-    setPassword("");
-    await loadArticles();
-    const fresh = await fetch("/api/auth/me");
-    const me = await fresh.json();
-    setSessionUser(me.user ?? null);
-  };
-
-  const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    setSessionUser(null);
-    setAuthMessage("Signed out.");
-    setArticles([]);
-  };
-
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!title.trim() || !content.trim()) return;
-
-    const method = editingId ? "PUT" : "POST";
-    const url = editingId ? `/api/articles/${editingId}` : "/api/articles";
-
-    const response = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, content }),
-    });
-
-    if (response.ok) {
-      setTitle("");
-      setContent("");
-      setEditingId(null);
-      const data = await loadArticles(query);
-      setArticles(data.articles ?? []);
-    }
-  };
-
-  const startEdit = (article: Article) => {
-    setEditingId(article.id);
-    setTitle(article.title);
-    setContent(article.content);
-  };
-
-  const handleDelete = async (id: string) => {
-    const response = await fetch(`/api/articles/${id}`, { method: "DELETE" });
-    if (!response.ok) {
-      setAuthMessage("You can only delete your own articles unless you are an admin.");
-      return;
-    }
-    const data = await loadArticles(query);
-    setArticles(data.articles ?? []);
-  };
-
-  const handleSummarize = async (id: string) => {
-    const response = await fetch(`/api/articles/${id}/summarize`);
-    if (!response.ok) {
-      setAuthMessage("Summarization is available only after login.");
-      return;
-    }
-    const data = await response.json();
-    setArticles((prev) =>
-      prev.map((article) => (article.id === id ? data.article : article)),
-    );
-  };
-
+export default function LandingPage() {
   return (
-    <main className="min-h-screen bg-[linear-gradient(135deg,#0f172a_0%,#111827_45%,#1f2937_100%)] text-white">
-      <section className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 py-10 lg:px-8">
-        <header className="rounded-3xl border border-white/10 bg-white/8 p-8 shadow-2xl shadow-black/20 backdrop-blur">
-          <p className="text-sm uppercase tracking-[0.35em] text-cyan-200">Platorform</p>
-          <h1 className="mt-3 text-4xl font-semibold text-white md:text-5xl">Write, manage, search, and summarize articles in one place.</h1>
-          <p className="mt-4 max-w-3xl text-lg text-slate-200">
-            This starter platform models a primary article store, a search index path, and on-demand AI summaries cached for fast reuse.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-3 text-sm text-slate-100">
-            <span className="rounded-full border border-cyan-400/40 bg-cyan-400/10 px-4 py-2">CRUD-ready article workflow</span>
-            <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-4 py-2">Elastic-style full-text search</span>
-            <span className="rounded-full border border-violet-400/40 bg-violet-400/10 px-4 py-2">Redis-style summary cache</span>
-          </div>
-        </header>
+    <div className="min-h-screen flex flex-col">
+      <Navbar />
 
-        <section className="rounded-3xl border border-white/10 bg-slate-950/80 p-6 shadow-2xl shadow-black/20 backdrop-blur">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-2xl font-semibold">Authentication & roles</h2>
-              <p className="mt-1 text-slate-300">Admin sees all articles; users manage only their own drafts.</p>
-            </div>
-            {sessionUser ? (
-              <button type="button" onClick={handleLogout} className="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800">Logout</button>
-            ) : null}
-          </div>
-          {sessionUser ? (
-            <p className="mt-4 rounded-2xl border border-emerald-400/30 bg-emerald-400/8 p-3 text-sm text-emerald-100">Signed in as <strong>{sessionUser.email}</strong> ({sessionUser.role}).</p>
-          ) : (
-            <form onSubmit={handleAuth} className="mt-4 space-y-3">
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setAuthMode("login")} className={`rounded-full px-4 py-2 text-sm ${authMode === "login" ? "bg-cyan-400 text-slate-950" : "border border-slate-700 bg-slate-900 text-slate-100"}`}>Login</button>
-                <button type="button" onClick={() => setAuthMode("signup")} className={`rounded-full px-4 py-2 text-sm ${authMode === "signup" ? "bg-cyan-400 text-slate-950" : "border border-slate-700 bg-slate-900 text-slate-100"}`}>Sign up</button>
-              </div>
-              <input value={email} onChange={(event) => setEmail(event.target.value)} className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-white" placeholder="Email" />
-              <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-white" placeholder="Password" />
-              {authMode === "signup" ? (
-                <select value={roleChoice} onChange={(event) => setRoleChoice(event.target.value as "Admin" | "User")} className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-white">
-                  <option value="User">User</option>
-                  <option value="Admin">Admin</option>
-                </select>
-              ) : null}
-              <button type="submit" className="rounded-full bg-cyan-400 px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-cyan-300">{authMode === "login" ? "Sign in" : "Create account"}</button>
-            </form>
-          )}
-          {authMessage ? <p className="mt-3 text-sm text-cyan-100">{authMessage}</p> : null}
-        </section>
-
-        <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
-          <section className="rounded-3xl border border-white/10 bg-slate-950/80 p-6 shadow-2xl shadow-black/20 backdrop-blur">
-            <div className="flex items-end justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-semibold">Article workspace</h2>
-                <p className="mt-1 text-slate-300">Create new content or update existing drafts in place.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingId(null);
-                  setTitle("");
-                  setContent("");
-                }}
-                className="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800"
-              >
-                New article
-              </button>
-            </div>
-
-            <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
-              <label className="block text-sm text-slate-200">
-                Title
-                <input
-                  value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  className="mt-1 w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-white outline-none ring-0 transition focus:border-cyan-400"
-                  placeholder="Article title"
-                />
-              </label>
-              <label className="block text-sm text-slate-200">
-                Content
-                <textarea
-                  value={content}
-                  onChange={(event) => setContent(event.target.value)}
-                  rows={6}
-                  className="mt-1 w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-white outline-none transition focus:border-cyan-400"
-                  placeholder="Write your article here..."
-                />
-              </label>
-              <button
-                type="submit"
-                className="rounded-full bg-cyan-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"
-              >
-                {editingId ? "Update article" : "Create article"}
-              </button>
-            </form>
-          </section>
-
-          <section className="rounded-3xl border border-white/10 bg-slate-950/80 p-6 shadow-2xl shadow-black/20 backdrop-blur">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-2xl font-semibold">Fast search index</h2>
-                <p className="mt-1 text-slate-300">Filter titles, bodies, and summaries from the article index.</p>
-              </div>
-              <span className="rounded-full bg-emerald-400/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-emerald-200">Search</span>
-            </div>
-            <input
-              value={query}
-              onChange={async (event) => {
-                const nextValue = event.target.value;
-                setQuery(nextValue);
-                const data = await loadArticles(nextValue);
-                setArticles(data.articles ?? []);
-              }}
-              className="mt-5 w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-white outline-none transition focus:border-emerald-400"
-              placeholder="Search article index"
-            />
-            <p className="mt-3 text-xs text-slate-400">This uses the same query path the real Elasticsearch layer would use for full-text search.</p>
-          </section>
+      {/* Hero */}
+      <section className="relative pt-32 pb-20 px-4 sm:px-6 overflow-hidden">
+        {/* Background effects */}
+        <div className="absolute inset-0 -z-10">
+          <div className="absolute top-20 left-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl" />
+          <div className="absolute top-40 right-1/4 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl" />
+          <div className="absolute -bottom-20 left-1/2 -translate-x-1/2 w-full h-px bg-gradient-to-r from-transparent via-border to-transparent" />
         </div>
 
-        {sessionUser?.role === "Admin" ? (
-          <section className="rounded-3xl border border-white/10 bg-slate-950/80 p-6 shadow-2xl shadow-black/20 backdrop-blur">
-            <h2 className="text-2xl font-semibold">Admin overview</h2>
-            <p className="mt-1 text-slate-300">Grouped view of all authored articles for quick oversight.</p>
-            <div className="mt-5 space-y-4">
-              {Object.entries(groupedArticles).map(([author, items]) => (
-                <article key={author} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                  <h3 className="text-lg font-semibold text-cyan-100">{author}</h3>
-                  <ul className="mt-2 space-y-2 text-sm text-slate-200">
-                    {items.map((item) => <li key={item.id} className="rounded-xl border border-slate-800 bg-slate-950/70 p-3">{item.title}</li>)}
-                  </ul>
-                </article>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        <section className="rounded-3xl border border-white/10 bg-slate-950/80 p-6 shadow-2xl shadow-black/20 backdrop-blur">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <h2 className="text-2xl font-semibold">Article list</h2>
-              <p className="mt-1 text-slate-300">Read, update, delete, or summarize each article on demand.</p>
-            </div>
-            {loading ? <span className="text-sm text-cyan-200">Loading…</span> : null}
+        <div className="max-w-5xl mx-auto text-center">
+          {/* Pill label */}
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-purple-500/30 bg-purple-500/10 text-purple-300 text-sm font-medium mb-8">
+            <Zap size={13} />
+            Powered by AI · Built for writers
           </div>
 
-          <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {filteredArticles.length === 0 ? (
-              <article className="rounded-3xl border border-dashed border-slate-700 bg-slate-900/70 p-5 text-slate-300">No articles yet. Create your first draft to populate the platform.</article>
-            ) : (
-              filteredArticles.map((article) => (
-                <article key={article.id} className="rounded-3xl border border-slate-800 bg-slate-900/70 p-5 shadow-lg shadow-black/20">
-                  <p className="text-xs uppercase tracking-[0.25em] text-cyan-200">Article</p>
-                  <h3 className="mt-2 text-xl font-semibold text-white">{article.title}</h3>
-                  <p className="mt-3 text-sm text-slate-200">{article.content}</p>
-                  <p className="mt-4 text-xs text-slate-400">Updated {new Date(article.updatedAt).toLocaleString()}</p>
-                  {article.summary ? (
-                    <div className="mt-4 rounded-2xl border border-violet-500/30 bg-violet-500/8 p-3 text-sm text-violet-100">{article.summary}</div>
-                  ) : null}
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => startEdit(article)}
-                      className="rounded-full border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-100 hover:bg-slate-700"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleSummarize(article.id)}
-                      className="rounded-full bg-violet-400 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-violet-300"
-                    >
-                      Summarize
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleDelete(article.id)}
-                      className="rounded-full bg-rose-400 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-rose-300"
-                    >
-                      Delete
-                    </button>
+          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6 leading-tight">
+            Write, Search &{" "}
+            <span className="gradient-text">Summarize Articles</span>{" "}
+            with AI
+          </h1>
+
+          <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed">
+            The modern platform where ideas take shape. Create compelling articles, discover insights, and let AI distill complex content into clear summaries — all in one place.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
+            <Link href="/dashboard">
+              <button className="group flex items-center gap-2 px-8 py-4 rounded-2xl bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold text-base hover:from-purple-500 hover:to-blue-500 transition-all duration-300 shadow-xl shadow-purple-500/30 hover:shadow-purple-500/50 hover:-translate-y-0.5">
+                Start Writing Free
+                <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+              </button>
+            </Link>
+            <Link href="/explore">
+              <button className="flex items-center gap-2 px-8 py-4 rounded-2xl border border-border bg-secondary/50 text-foreground font-semibold text-base hover:bg-secondary hover:border-purple-500/40 transition-all duration-300">
+                <Search size={16} />
+                Explore Articles
+              </button>
+            </Link>
+          </div>
+
+          {/* Dashboard Mockup */}
+          <div className="relative max-w-4xl mx-auto">
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background z-10 pointer-events-none rounded-3xl" style={{ top: "70%" }} />
+            <div className="relative rounded-3xl border border-border bg-card overflow-hidden shadow-2xl shadow-black/50 glow-purple">
+              {/* Mock browser bar */}
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-secondary/50">
+                <div className="flex gap-1.5">
+                  {["#ff5f57", "#febc2e", "#28c840"].map((c, i) => (
+                    <div key={i} className="w-3 h-3 rounded-full" style={{ background: c }} />
+                  ))}
+                </div>
+                <div className="flex-1 bg-background/50 rounded-md px-3 py-1 text-xs text-muted-foreground max-w-xs mx-auto">
+                  articula.io/dashboard
+                </div>
+              </div>
+              {/* Mock dashboard content */}
+              <div className="grid grid-cols-12 h-80">
+                {/* Sidebar */}
+                <div className="col-span-2 bg-secondary/30 border-r border-border p-3 space-y-2">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className={`h-7 rounded-lg ${i === 0 ? "bg-purple-500/30" : "bg-secondary/50"}`} />
+                  ))}
+                </div>
+                {/* Main content */}
+                <div className="col-span-10 p-5 space-y-4">
+                  <div className="grid grid-cols-4 gap-3">
+                    {[
+                      { c: "purple", v: "47", l: "Articles" },
+                      { c: "blue", v: "32", l: "Summaries" },
+                      { c: "green", v: "184K", l: "Views" },
+                      { c: "orange", v: "9.4K", l: "Searches" },
+                    ].map(({ c, v, l }) => (
+                      <div key={l} className={`bg-${c}-500/10 border border-${c}-500/20 rounded-xl p-3`}>
+                        <p className="text-lg font-bold">{v}</p>
+                        <p className="text-xs text-muted-foreground">{l}</p>
+                      </div>
+                    ))}
                   </div>
-                </article>
-              ))
-            )}
+                  <div className="space-y-2">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="flex items-center gap-3 p-3 bg-secondary/30 rounded-xl">
+                        <div className="w-8 h-8 rounded-lg bg-purple-500/20" />
+                        <div className="flex-1 space-y-1.5">
+                          <div className="h-3 bg-secondary rounded-md w-3/4" />
+                          <div className="h-2.5 bg-secondary/60 rounded-md w-1/2" />
+                        </div>
+                        <div className="h-5 w-16 rounded-full bg-green-500/20" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        </section>
+        </div>
       </section>
-    </main>
+
+      {/* Stats */}
+      <section className="py-16 px-4 sm:px-6 border-y border-border bg-secondary/20">
+        <div className="max-w-5xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-8">
+          {stats.map(({ value, label }) => (
+            <div key={label} className="text-center">
+              <p className="text-3xl font-bold gradient-text mb-1">{value}</p>
+              <p className="text-sm text-muted-foreground">{label}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Features */}
+      <section id="features" className="py-24 px-4 sm:px-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-300 text-sm font-medium mb-4">
+              <Star size={13} />
+              Features
+            </div>
+            <h2 className="text-4xl sm:text-5xl font-bold mb-4">
+              Everything you need to{" "}
+              <span className="gradient-text">write and discover</span>
+            </h2>
+            <p className="text-muted-foreground max-w-xl mx-auto text-lg">
+              A comprehensive platform built for modern writers, researchers, and content teams.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {features.map(({ icon: Icon, title, description, color, iconColor }) => (
+              <div
+                key={title}
+                className={`group p-6 rounded-2xl border border-border bg-gradient-to-br ${color} hover:border-border/80 hover:shadow-lg transition-all duration-300`}
+              >
+                <div className={`w-10 h-10 rounded-xl bg-background/40 flex items-center justify-center mb-4 ${iconColor}`}>
+                  <Icon size={20} />
+                </div>
+                <h3 className="font-semibold mb-2">{title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Demo Articles */}
+      <section className="py-24 px-4 sm:px-6 bg-secondary/10">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex items-end justify-between mb-10">
+            <div>
+              <p className="text-sm font-medium text-purple-400 mb-2">Latest on Articula</p>
+              <h2 className="text-3xl sm:text-4xl font-bold">Featured Articles</h2>
+            </div>
+            <Link href="/explore" className="hidden sm:flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+              View all <ArrowRight size={14} />
+            </Link>
+          </div>
+          <ArticleGrid articles={articles.slice(0, 6)} />
+          <div className="flex justify-center mt-10">
+            <Link href="/explore">
+              <button className="flex items-center gap-2 px-6 py-3 rounded-2xl border border-border hover:border-purple-500/40 hover:bg-purple-500/5 text-sm font-medium transition-all duration-200">
+                Explore all articles <ArrowRight size={14} />
+              </button>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="py-24 px-4 sm:px-6">
+        <div className="max-w-3xl mx-auto text-center">
+          <div className="relative p-12 rounded-3xl border border-purple-500/20 bg-gradient-to-br from-purple-500/10 to-blue-500/10 overflow-hidden">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-px bg-gradient-to-r from-transparent via-purple-500/50 to-transparent" />
+            <h2 className="text-4xl font-bold mb-4">
+              Ready to start writing?
+            </h2>
+            <p className="text-muted-foreground mb-8 text-lg">
+              Join thousands of writers who use Articula to create, discover, and share knowledge.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link href="/signup">
+                <button className="flex items-center gap-2 px-8 py-4 rounded-2xl bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold hover:from-purple-500 hover:to-blue-500 transition-all shadow-xl shadow-purple-500/30">
+                  Create free account
+                  <ArrowRight size={16} />
+                </button>
+              </Link>
+              <Link href="/explore">
+                <button className="flex items-center gap-2 px-8 py-4 rounded-2xl border border-border hover:bg-secondary text-sm font-semibold transition-all">
+                  Browse articles
+                </button>
+              </Link>
+            </div>
+            <div className="flex items-center justify-center gap-2 mt-6 text-sm text-muted-foreground">
+              <CheckCircle2 size={14} className="text-green-400" />
+              Free forever · No credit card required
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <Footer />
+    </div>
   );
 }
-

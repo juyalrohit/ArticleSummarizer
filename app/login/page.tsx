@@ -3,56 +3,38 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Zap, ArrowRight } from "lucide-react";
+import { Eye, EyeOff, Zap, ArrowRight, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useArticula } from "@/lib/store";
 
 export default function LoginPage() {
+  const { login, authMessage, clearAuthMessage } = useArticula();
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [authMessage, setAuthMessage] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [pending, setPending] = useState(false);
 
-  const handleAuth = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setLoading(true);
-    setAuthMessage("");
-
-    try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setAuthMessage(data.error ?? "Authentication failed.");
-        return;
-      }
-
-      router.push("/");
-      router.refresh();
-    } catch (error) {
-      setAuthMessage("An unexpected error occurred. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    clearAuthMessage();
+    setPending(true);
+    const ok = await login(email, password);
+    setPending(false);
+    if (ok) router.push("/dashboard");
   };
+
+  const isSuccess = authMessage.includes("successfully");
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
-      {/* Bg effects */}
       <div className="absolute inset-0 -z-10">
         <div className="absolute top-1/3 left-1/4 w-80 h-80 bg-purple-500/8 rounded-full blur-3xl" />
         <div className="absolute bottom-1/3 right-1/4 w-80 h-80 bg-blue-500/8 rounded-full blur-3xl" />
       </div>
 
       <div className="w-full max-w-md">
-        {/* Logo */}
         <Link href="/" className="flex items-center justify-center gap-2 mb-8">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
             <Zap size={16} className="text-white" />
@@ -60,12 +42,23 @@ export default function LoginPage() {
           <span className="font-bold text-xl gradient-text">Articula</span>
         </Link>
 
-        {/* Card */}
         <div className="bg-card border border-border rounded-3xl p-8 shadow-2xl shadow-black/30">
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold mb-1">Welcome back</h1>
             <p className="text-sm text-muted-foreground">Sign in to continue to Articula</p>
           </div>
+
+          {/* Auth message */}
+          {authMessage && (
+            <div className={`flex items-center gap-2 mb-5 p-3 rounded-xl text-sm border ${
+              isSuccess
+                ? "bg-green-500/10 border-green-500/30 text-green-300"
+                : "bg-red-500/10 border-red-500/30 text-red-300"
+            }`}>
+              {isSuccess ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+              {authMessage}
+            </div>
+          )}
 
           {/* Google Button */}
           <button className="w-full flex items-center justify-center gap-3 h-11 rounded-xl border border-border bg-secondary/50 hover:bg-secondary text-sm font-medium transition-colors mb-6">
@@ -84,7 +77,7 @@ export default function LoginPage() {
             <div className="flex-1 h-px bg-border" />
           </div>
 
-          <form onSubmit={handleAuth} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="text-sm font-medium mb-1.5 block">Email address</label>
               <Input
@@ -95,13 +88,10 @@ export default function LoginPage() {
                 required
               />
             </div>
-
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-sm font-medium">Password</label>
-                <Link href="#" className="text-xs text-purple-400 hover:text-purple-300">
-                  Forgot password?
-                </Link>
+                <Link href="#" className="text-xs text-purple-400 hover:text-purple-300">Forgot password?</Link>
               </div>
               <div className="relative">
                 <Input
@@ -121,30 +111,17 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
-
-            <Button type="submit" variant="gradient" className="w-full mt-2" size="md" disabled={loading}>
-              {loading ? "Signing in..." : "Sign in"}
-              {!loading && <ArrowRight size={14} />}
+            <Button variant="gradient" className="w-full mt-2" size="md" type="submit" disabled={pending}>
+              {pending ? "Signing in…" : "Sign in"}
+              {!pending && <ArrowRight size={14} />}
             </Button>
-
-            {authMessage && (
-              <p className="text-sm text-center text-rose-400 mt-2">{authMessage}</p>
-            )}
           </form>
 
           <p className="text-center text-sm text-muted-foreground mt-6">
             Don&apos;t have an account?{" "}
-            <Link href="/signup" className="text-purple-400 hover:text-purple-300 font-medium">
-              Create one free
-            </Link>
+            <Link href="/signup" className="text-purple-400 hover:text-purple-300 font-medium">Create one free</Link>
           </p>
         </div>
-
-        <p className="text-center text-xs text-muted-foreground mt-6">
-          By signing in, you agree to our{" "}
-          <a href="#" className="hover:text-foreground">Terms</a> and{" "}
-          <a href="#" className="hover:text-foreground">Privacy Policy</a>
-        </p>
       </div>
     </div>
   );

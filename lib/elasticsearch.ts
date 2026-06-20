@@ -75,6 +75,7 @@ export async function softDeleteArticle(id: string) {
 
 export async function searchArticles(query: string) {
   await ensureIndex();
+  console.log("Yes bro elastic search",)
   const response = await client.search({
     index: INDEX_NAME,
     query: {

@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 
 import { connectToDatabase } from "./mongodb";
-import { UserModel } from "../models/User";
+import { UserModel } from "@/app/models/User";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 

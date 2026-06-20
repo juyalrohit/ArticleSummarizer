@@ -1,180 +1,149 @@
 "use client";
 
 import { useState } from "react";
-import { Save, Eye, Send, Bold, Italic, Code, List, Link, Hash, Image as ImageIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Save, Send, Eye, EyeOff, AlertCircle, CheckCircle2, ArrowLeft, FileText } from "lucide-react";
 import { DashboardSidebar } from "@/components/layout/dashboard-sidebar";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
-
-const toolbarButtons = [
-  { icon: Bold, label: "Bold" },
-  { icon: Italic, label: "Italic" },
-  { icon: Code, label: "Code" },
-  { icon: List, label: "List" },
-  { icon: Link, label: "Link" },
-  { icon: Hash, label: "Heading" },
-  { icon: ImageIcon, label: "Image" },
-];
-
-const dummyContent = `## Introduction
-
-Start writing your article here. This editor supports Markdown formatting.
-
-You can use **bold**, *italic*, and \`code\` inline formatting.
-
-## Getting Started
-
-Write your main content in this area. The live preview will show how your article looks to readers.
-
-- Use bullet points for lists
-- Add headings to structure your content
-- Include code blocks for technical content
-
-## Conclusion
-
-Wrap up your article with key takeaways and next steps for readers.`;
+import { useArticula } from "@/lib/store";
+import Link from "next/link";
 
 export default function CreateArticlePage() {
+  const { createArticle, sessionUser } = useArticula();
+  const router = useRouter();
   const [title, setTitle] = useState("");
-  const [content, setContent] = useState(dummyContent);
-  const [tags, setTags] = useState<string[]>(["TypeScript", "React"]);
-  const [tagInput, setTagInput] = useState("");
+  const [content, setContent] = useState("");
   const [preview, setPreview] = useState(false);
-  const [saved, setSaved] = useState<null | "draft" | "published">(null);
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  const addTag = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && tagInput.trim()) {
-      setTags([...tags, tagInput.trim()]);
-      setTagInput("");
+  if (!sessionUser) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground mb-4">You must be signed in to write articles.</p>
+          <Link href="/login"><Button variant="gradient">Sign in</Button></Link>
+        </div>
+      </div>
+    );
+  }
+
+  const handleSave = async (publish = false) => {
+    if (!title.trim() || !content.trim()) {
+      setMessage({ type: "error", text: "Title and content are required." });
+      return;
+    }
+    setPending(true);
+    setMessage(null);
+    const ok = await createArticle(title, content);
+    setPending(false);
+    if (ok) {
+      setMessage({ type: "success", text: publish ? "Article published!" : "Draft saved!" });
+      setTimeout(() => router.push("/dashboard/my-articles"), 1000);
+    } else {
+      setMessage({ type: "error", text: "Failed to save. Please try again." });
     }
   };
 
-  const removeTag = (tag: string) => setTags(tags.filter((t) => t !== tag));
+  const wordCount = content.trim().split(/\s+/).filter(Boolean).length;
+  const readTime = Math.max(1, Math.ceil(wordCount / 200));
 
   return (
     <div className="flex min-h-screen">
       <DashboardSidebar />
-      <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Top bar */}
+
+      <main className="flex-1 overflow-auto flex flex-col">
+        {/* Topbar */}
         <div className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur-xl px-6 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <span className="text-sm font-medium">New Article</span>
-            {saved && (
-              <Badge variant={saved === "published" ? "green" : "secondary"}>
-                {saved === "published" ? "Published" : "Draft saved"}
-              </Badge>
-            )}
+            <Link href="/dashboard/my-articles">
+              <button className="p-2 rounded-xl hover:bg-accent transition-colors text-muted-foreground hover:text-foreground">
+                <ArrowLeft size={16} />
+              </button>
+            </Link>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <FileText size={14} />
+              <span>New article</span>
+            </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
               onClick={() => setPreview(!preview)}
-              className={preview ? "text-purple-400" : ""}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors border border-border"
             >
-              <Eye size={14} />
+              {preview ? <EyeOff size={13} /> : <Eye size={13} />}
               {preview ? "Edit" : "Preview"}
+            </button>
+            <Button variant="outline" size="sm" onClick={() => handleSave(false)} disabled={pending}>
+              <Save size={13} /> {pending ? "Saving…" : "Save Draft"}
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSaved("draft")}
-            >
-              <Save size={13} />
-              Save draft
-            </Button>
-            <Button
-              variant="gradient"
-              size="sm"
-              onClick={() => setSaved("published")}
-            >
-              <Send size={13} />
-              Publish
+            <Button variant="gradient" size="sm" onClick={() => handleSave(true)} disabled={pending}>
+              <Send size={13} /> Publish
             </Button>
           </div>
         </div>
 
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 overflow-hidden">
-          {/* Editor Panel */}
-          <div className={cn("flex flex-col border-r border-border overflow-auto", preview && "hidden lg:flex")}>
-            <div className="p-6 pb-0">
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Article title..."
-                className="w-full text-3xl font-bold bg-transparent border-none outline-none placeholder:text-muted-foreground/40 resize-none mb-4"
-              />
+        {/* Message banner */}
+        {message && (
+          <div className={`mx-6 mt-4 flex items-center gap-2 p-3 rounded-xl text-sm border ${
+            message.type === "success"
+              ? "bg-green-500/10 border-green-500/30 text-green-300"
+              : "bg-red-500/10 border-red-500/30 text-red-300"
+          }`}>
+            {message.type === "success" ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+            {message.text}
+          </div>
+        )}
 
-              {/* Tags */}
-              <div className="flex flex-wrap gap-2 mb-4">
-                {tags.map((tag) => (
-                  <button
-                    key={tag}
-                    onClick={() => removeTag(tag)}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/30 text-xs hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30 transition-colors"
-                  >
-                    {tag} ×
-                  </button>
-                ))}
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_280px]">
+          {/* Editor / Preview */}
+          <div className="min-h-full p-6 lg:p-10 border-r border-border">
+            {preview ? (
+              <div className="max-w-2xl mx-auto">
+                <h1 className="text-4xl font-bold mb-6 leading-tight">{title || <span className="text-muted-foreground">Untitled article</span>}</h1>
+                <div className="text-muted-foreground leading-relaxed whitespace-pre-wrap">{content || "No content yet."}</div>
+              </div>
+            ) : (
+              <div className="max-w-2xl mx-auto space-y-4">
                 <input
-                  value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  onKeyDown={addTag}
-                  placeholder="Add tag..."
-                  className="px-2 py-1 bg-transparent border-none outline-none text-xs text-muted-foreground placeholder:text-muted-foreground/40"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Article title…"
+                  className="w-full bg-transparent text-4xl font-bold placeholder:text-muted-foreground/40 outline-none border-none resize-none leading-tight"
+                />
+                <div className="h-px bg-border" />
+                <textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="Start writing your article here… Use markdown-style headings like ## Section, **bold**, and `code`."
+                  rows={24}
+                  className="w-full bg-transparent text-base text-muted-foreground placeholder:text-muted-foreground/40 outline-none border-none resize-none leading-relaxed font-mono"
                 />
               </div>
-            </div>
-
-            {/* Toolbar */}
-            <div className="flex items-center gap-1 px-6 py-2 border-y border-border bg-secondary/20">
-              {toolbarButtons.map(({ icon: Icon, label }) => (
-                <button
-                  key={label}
-                  title={label}
-                  className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                >
-                  <Icon size={14} />
-                </button>
-              ))}
-            </div>
-
-            {/* Content editor */}
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Start writing your article in Markdown..."
-              className="flex-1 p-6 bg-transparent border-none outline-none resize-none text-sm text-muted-foreground leading-relaxed font-mono scrollbar-thin min-h-[500px]"
-            />
+            )}
           </div>
 
-          {/* Preview Panel */}
-          <div className={cn("overflow-auto p-8", !preview && "hidden lg:block")}>
-            <div className="max-w-2xl mx-auto">
-              {title ? (
-                <h1 className="text-3xl font-bold mb-6">{title}</h1>
-              ) : (
-                <h1 className="text-3xl font-bold mb-6 text-muted-foreground/30">Article title preview</h1>
-              )}
-              {tags.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-6">
-                  {tags.map((tag) => <Badge key={tag} variant="purple">{tag}</Badge>)}
-                </div>
-              )}
-              <div className="prose prose-invert max-w-none text-sm">
-                {content.split("\n\n").map((block, i) => {
-                  if (block.startsWith("## ")) return <h2 key={i} className="text-2xl font-bold mt-8 mb-3 text-foreground">{block.slice(3)}</h2>;
-                  if (block.startsWith("### ")) return <h3 key={i} className="text-xl font-semibold mt-6 mb-2 text-foreground">{block.slice(4)}</h3>;
-                  if (block.startsWith("- ")) {
-                    const items = block.split("\n").filter(l => l.startsWith("- "));
-                    return <ul key={i} className="space-y-1 my-4 pl-4">{items.map((item, j) => <li key={j} className="text-muted-foreground flex gap-2"><span className="text-purple-400">•</span>{item.slice(2)}</li>)}</ul>;
-                  }
-                  if (block.trim()) return <p key={i} className="text-muted-foreground leading-relaxed mb-4">{block}</p>;
-                  return null;
-                })}
-              </div>
+          {/* Right panel */}
+          <div className="p-5 space-y-5 hidden lg:block">
+            <div className="bg-card border border-border rounded-2xl p-4 space-y-3 text-sm">
+              <h3 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">Article Stats</h3>
+              <div className="flex justify-between"><span className="text-muted-foreground">Words</span><span>{wordCount}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Read time</span><span>~{readTime} min</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Characters</span><span>{content.length}</span></div>
+            </div>
+
+            <div className="bg-card border border-border rounded-2xl p-4 text-sm">
+              <h3 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground mb-3">Writing Tips</h3>
+              <ul className="space-y-2 text-muted-foreground">
+                {["Start with a clear hook", "Use ## for section headings", "**bold** for key terms", "`backticks` for inline code", "Aim for 800–1500 words"].map((t) => (
+                  <li key={t} className="flex gap-2 text-xs"><span className="text-purple-400">→</span>{t}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-4 text-sm">
+              <p className="text-xs text-purple-300 font-medium mb-1">✦ AI Summary</p>
+              <p className="text-xs text-muted-foreground">After publishing, you can generate an AI summary from the article detail page.</p>
             </div>
           </div>
         </div>

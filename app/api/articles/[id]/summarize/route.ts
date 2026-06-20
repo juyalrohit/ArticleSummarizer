@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-import { connectToDatabase } from "../../../../lib/mongodb";
+import { connectToDatabase } from "@/lib/mongodb";
 import { ArticleModel } from "../../../../models/Article";
-import { requireAuth } from "../../../../lib/auth";
+import { requireAuth } from "@/lib/auth";
+import { geminiModel } from "@/lib/gemini";
+import { connectRedis } from "@/lib/redis";
 
 function serializeArticle(article: Record<string, unknown>) {
   const { _id, ...rest } = article;
@@ -15,39 +18,42 @@ const summaryCache = (globalThis as typeof globalThis & {
   __SUMMARY_CACHE__?: Record<string, string>;
 }).__SUMMARY_CACHE__ = {});
 
-async function generateSummary(text: string) {
-  const apiKey = process.env.GEMINI_API_KEY;
 
-  if (!apiKey) {
-    return `Auto summary unavailable. In production, connect GEMINI_API_KEY for AI summaries. Source preview: ${text.slice(0, 120)}...`;
+
+
+async function generateSummary(content: string) {
+  try {
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("Gemini API key missing");
+    }
+
+    const prompt = `
+      Summarize the following article in 5 concise bullet points.
+
+      Article:
+      ${content}
+    `;
+
+    const result = await geminiModel.generateContent(prompt);
+
+    const summary = result.response.text();
+
+    if (!summary) {
+      throw new Error("Empty response from Gemini");
+    }
+
+    return summary;
+  } catch (error) {
+    console.error("Gemini Error:", error);
+
+    if (error instanceof Error) {
+      if (error.message.includes("API key")) {
+        throw new Error("Gemini configuration error");
+      }
+    }
+
+    throw new Error("Failed to generate summary");
   }
-
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [
-              {
-                text: `Summarize this article in three concise bullet points:\n\n${text}`,
-              },
-            ],
-          },
-        ],
-      }),
-    },
-  );
-
-  if (!response.ok) {
-    throw new Error(`Gemini API request failed: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "Summary unavailable.";
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -68,13 +74,24 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (summaryCache[id]) {
-    return NextResponse.json({ article: { ...serializeArticle(article), summary: summaryCache[id] } });
+  const redis = await connectRedis();
+  const cachedSummary = await redis.get(`summary:${id}`);
+
+  if (cachedSummary) {
+    return NextResponse.json({ article: { ...serializeArticle(article), summary: cachedSummary } });
   }
 
   try {
+    console.log("Sending Request to Gemini To Genrate summary");
     const summary = await generateSummary(`${article.title}\n\n${article.content}`);
-    summaryCache[id] = summary;
+
+    await redis.set(
+      `summary:${id}`,
+      summary,
+      {
+        EX: 86400,
+      }
+    );    
     const summaryArticle = { ...serializeArticle(article), summary };
 
     return NextResponse.json({ article: summaryArticle });

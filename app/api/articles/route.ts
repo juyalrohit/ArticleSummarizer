@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { connectToDatabase } from "../../lib/mongodb";
+import { connectToDatabase } from "@/lib/mongodb";
 import { ArticleModel } from "../../models/Article";
-import { requireAuth } from "../../lib/auth";
-import { indexArticle, searchArticles } from "../../lib/elasticsearch";
+import { requireAuth } from "@/lib/auth";
+import { indexArticle, searchArticles } from "@/lib/elasticsearch";
 
 function serializeArticle(article: Record<string, unknown>) {
   const { _id, ...rest } = article;

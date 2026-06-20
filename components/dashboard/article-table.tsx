@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ui/modal";
 import type { Article } from "@/lib/data";
 
+
+
 interface ArticleTableProps {
   articles: Article[];
   showAuthor?: boolean;
@@ -63,7 +65,7 @@ export function ArticleTable({ articles, showAuthor = false }: ArticleTableProps
                   <span className="text-sm text-muted-foreground">{article.publishedAt}</span>
                 </td>
                 <td className="px-5 py-4 hidden lg:table-cell">
-                  <span className="text-sm text-muted-foreground">{article.views.toLocaleString()}</span>
+                  <span className="text-sm text-muted-foreground">{article?.views?.toLocaleString() || '9'}</span>
                 </td>
                 <td className="px-5 py-4">
                   <Badge variant={article.status === "published" ? "green" : "secondary"}>

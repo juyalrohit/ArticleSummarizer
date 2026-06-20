@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 
-import { connectToDatabase } from "../../../lib/mongodb";
+import { connectToDatabase } from "@/lib/mongodb";
 import { UserModel } from "../../../models/User";
-import { createSession } from "../../../lib/auth";
+import { createSession } from "@/lib/auth";
 
 export async function POST(request: Request) {
    await connectToDatabase();

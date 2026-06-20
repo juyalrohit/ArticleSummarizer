@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { connectToDatabase } from "../../../lib/mongodb";
+import { connectToDatabase } from "@/lib/mongodb";
 import { ArticleModel } from "../../../models/Article";
-import { requireAuth } from "../../../lib/auth";
-import { indexArticle, softDeleteArticle } from "../../../lib/elasticsearch";
+import { requireAuth } from "@/lib/auth";
+import { indexArticle, softDeleteArticle } from "@/lib/elasticsearch";
+import { connectRedis } from "@/lib/redis";
 
 function serializeArticle(article: Record<string, unknown>) {
   const { _id, ...rest } = article;
@@ -68,6 +69,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     }
 
     await article.save();
+    const redis = await connectRedis();
+
+    await redis.del(`summary:${id}`);
    try{
       await indexArticle({
       id: String(article._id),

@@ -3,50 +3,36 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Zap, CheckCircle2, ArrowRight } from "lucide-react";
+import { Eye, EyeOff, Zap, CheckCircle2, ArrowRight, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-
-const perks = [
-  "Free forever — no credit card needed",
-  "AI summaries for every article",
-  "Powerful full-text search",
-];
+import { useArticula } from "@/lib/store";
 
 export default function SignupPage() {
+  const { signup, authMessage, clearAuthMessage } = useArticula();
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [authMessage, setAuthMessage] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [pending, setPending] = useState(false);
+  const [localError, setLocalError] = useState("");
 
-  const handleSignup = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setLoading(true);
-    setAuthMessage("");
-
-    try {
-      const response = await fetch("/api/auth/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, role: "User" }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setAuthMessage(data.error ?? "Registration failed.");
-        return;
-      }
-
-      router.push("/login");
-    } catch (error) {
-      setAuthMessage("An unexpected error occurred. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLocalError("");
+    clearAuthMessage();
+    if (password !== confirmPassword) { setLocalError("Passwords do not match."); return; }
+    if (password.length < 6) { setLocalError("Password must be at least 6 characters."); return; }
+    setPending(true);
+    const ok = await signup(name, email, password);
+    setPending(false);
+    if (ok) router.push("/dashboard");
   };
+
+  const error = localError || (!authMessage.includes("successfully") ? authMessage : "");
+  const perks = ["Free forever — no credit card needed", "AI summaries for every article", "Role-based access control"];
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
@@ -64,21 +50,18 @@ export default function SignupPage() {
         </Link>
 
         <div className="bg-card border border-border rounded-3xl p-8 shadow-2xl shadow-black/30">
-          <div className="text-center mb-8">
+          <div className="text-center mb-6">
             <h1 className="text-2xl font-bold mb-1">Create your account</h1>
             <p className="text-sm text-muted-foreground">Start writing and discovering knowledge</p>
           </div>
 
-          {/* Perks */}
-          <div className="flex flex-col gap-2 mb-6 p-4 rounded-xl bg-purple-500/5 border border-purple-500/20">
-            {perks.map((perk) => (
-              <div key={perk} className="flex items-center gap-2 text-sm text-muted-foreground">
-                <CheckCircle2 size={13} className="text-green-400 shrink-0" />
-                {perk}
-              </div>
-            ))}
-          </div>
+          {error && (
+            <div className="flex items-center gap-2 mb-5 p-3 rounded-xl text-sm border bg-red-500/10 border-red-500/30 text-red-300">
+              <AlertCircle size={14} className="shrink-0" /> {error}
+            </div>
+          )}
 
+          {/* Google Button */}
           <button className="w-full flex items-center justify-center gap-3 h-11 rounded-xl border border-border bg-secondary/50 hover:bg-secondary text-sm font-medium transition-colors mb-6">
             <svg width="16" height="16" viewBox="0 0 24 24">
               <path fill="#4285f4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -89,59 +72,47 @@ export default function SignupPage() {
             Continue with Google
           </button>
 
-          <div className="relative flex items-center gap-3 mb-6">
-            <div className="flex-1 h-px bg-border" />
-            <span className="text-xs text-muted-foreground">or</span>
-            <div className="flex-1 h-px bg-border" />
-          </div>
+         
 
-          <form onSubmit={handleSignup} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Full Name</label>
+              <Input type="text" placeholder="Aria Chen" value={name} onChange={(e) => setName(e.target.value)} required />
+            </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Email address</label>
-              <Input
-                type="email"
-                placeholder="aria@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+              <Input type="email" placeholder="aria@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Password</label>
               <div className="relative">
                 <Input
                   type={showPassword ? "text" : "password"}
-                  placeholder="Min. 8 characters"
+                  placeholder="Min. 6 characters"
                   className="pr-10"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                >
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
                   {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
               </div>
             </div>
-
-            <Button type="submit" variant="gradient" className="w-full mt-2" size="md" disabled={loading}>
-              {loading ? "Creating account..." : "Create free account"}
-              {!loading && <ArrowRight size={14} />}
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Confirm password</label>
+              <Input type="password" placeholder="Repeat your password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+            </div>
+            
+            <Button variant="gradient" className="w-full mt-2" size="md" type="submit" disabled={pending}>
+              {pending ? "Creating account…" : "Create free account"}
+              {!pending && <ArrowRight size={14} />}
             </Button>
-
-            {authMessage && (
-              <p className="text-sm text-center text-rose-400 mt-2">{authMessage}</p>
-            )}
           </form>
 
           <p className="text-center text-sm text-muted-foreground mt-6">
             Already have an account?{" "}
-            <Link href="/login" className="text-purple-400 hover:text-purple-300 font-medium">
-              Sign in
-            </Link>
+            <Link href="/login" className="text-purple-400 hover:text-purple-300 font-medium">Sign in</Link>
           </p>
         </div>
       </div>
