@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ArticulaProvider } from "@/lib/store";
+import Providers from "./providers";
 
 export const metadata: Metadata = {
   title: "Articula — Write, Search & Summarize with AI",
@@ -12,7 +13,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark">
       <body className="antialiased min-h-screen bg-background text-foreground font-sans">
         <ArticulaProvider>
-          {children}
+          <Providers>
+            {children}
+          </Providers>    
         </ArticulaProvider>
       </body>
     </html>

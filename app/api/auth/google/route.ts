@@ -1,17 +1,74 @@
-// app/api/auth/google/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { OAuth2Client } from "google-auth-library";
+import jwt from "jsonwebtoken";
+import { cookies } from "next/headers";
 
-import { NextResponse } from "next/server";
+import { connectToDatabase } from "@/lib/mongodb";
+import { UserModel } from "@/app/models/User";
+import { createSession } from "@/lib/auth";
+const client = new OAuth2Client(
+  process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
+);
 
-export async function GET() {
-  const url =
-    `https://accounts.google.com/o/oauth2/v2/auth?` +
-    new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID!,
-      redirect_uri:
-        "http://localhost:3000/api/auth/google/callback",
-      response_type: "code",
-      scope: "openid email profile",
+export async function POST(req: NextRequest) {
+  try {
+    const { credential } = await req.json();
+
+    if (!credential) {
+      return NextResponse.json(
+        { error: "Missing credential" },
+        { status: 400 }
+      );
+    }
+
+    const ticket = await client.verifyIdToken({
+      idToken: credential,
+      audience: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
     });
 
-  return NextResponse.redirect(url);
+    const payload = ticket.getPayload();
+
+    if (!payload?.email) {
+      return NextResponse.json(
+        { error: "Invalid Google token" },
+        { status: 401 }
+      );
+    }
+
+    await connectToDatabase();
+
+    let user = await UserModel.findOne({
+      email: payload.email,
+    });
+
+    if (!user) {
+      user = await UserModel.create({
+        name: payload.name,
+        email: payload.email,
+        provider: "google",
+        role: "User",
+      });
+    }
+
+   await createSession(user);
+
+    return NextResponse.json({
+      user: {
+        id: user._id,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    console.error("Google Auth Error:", error);
+
+    return NextResponse.json(
+      {
+        error: "Google authentication failed",
+      },
+      {
+        status: 500,
+      }
+    );
+  }
 }
